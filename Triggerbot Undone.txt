@@ -1,0 +1,119 @@
+-- triggerbot by @dgqt
+local VirtualInputManager = game:GetService("VirtualInputManager")
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local UserInputService = game:GetService("UserInputService")
+
+local autoclicker = {
+    enabled = false,
+    ClickDelay = 0.12, -- Default click delay
+    FOVRadius = 25 -- The radius of the FOV circle
+}
+
+-- Create ScreenGui and ToggleButton
+local ScreenGui = Instance.new("ScreenGui", game.CoreGui)
+local ToggleButton = Instance.new("TextButton", ScreenGui)
+
+-- Set up ToggleButton properties
+ToggleButton.Size = UDim2.new(0, 100, 0, 50)
+ToggleButton.Position = UDim2.new(0, 10, 0, 10)
+ToggleButton.Text = "Sinx Triggerbot"
+ToggleButton.BackgroundColor3 = Color3.new(0, 0, 0) -- Black color
+ToggleButton.TextColor3 = Color3.new(1, 1, 1)
+ToggleButton.BorderSizePixel = 1
+ToggleButton.BorderColor3 = Color3.new(1, 1, 1) -- White frame
+
+local FOVCircle = Drawing.new("Circle")
+FOVCircle.Radius = autoclicker.FOVRadius
+FOVCircle.Thickness = 2
+FOVCircle.Color = Color3.new(1, 1, 1)
+FOVCircle.Position = Vector2.new(workspace.CurrentCamera.ViewportSize.X / 2, workspace.CurrentCamera.ViewportSize.Y / 2)
+FOVCircle.Visible = false
+FOVCircle.Filled = false -- Set to false
+
+local triggerbotEnabled = false
+
+local function IsPlayerInFOV(player)
+    local character = player.Character
+    if character and character:FindFirstChild("HumanoidRootPart") then
+        local rootPart = character.HumanoidRootPart
+        local screenPoint, onScreen = workspace.CurrentCamera:WorldToViewportPoint(rootPart.Position)
+        if onScreen then
+            local magnitude = (Vector2.new(screenPoint.X, screenPoint.Y) - FOVCircle.Position).Magnitude
+            return magnitude <= autoclicker.FOVRadius
+        end
+    end
+    return false
+end
+
+local lastClickTime = 0
+
+local function TapScreen()
+    local currentTime = tick()
+    if currentTime - lastClickTime >= autoclicker.ClickDelay then
+local viewportSize = workspace.CurrentCamera.ViewportSize
+        local touchPosition = Vector2.new(viewportSize.X / 2, viewportSize.Y / 2)
+        VirtualInputManager:SendMouseButtonEvent(touchPosition.X, touchPosition.Y, 0, true, game, 0)
+        VirtualInputManager:SendMouseButtonEvent(touchPosition.X, touchPosition.Y, 0, false, game, 0)
+        lastClickTime = currentTime
+    end
+end
+
+ToggleButton.MouseButton1Click:Connect(function()
+    triggerbotEnabled = not triggerbotEnabled
+    ToggleButton.BackgroundColor3 = triggerbotEnabled and Color3.new(0, 1, 0) or Color3.new(0, 0, 0)
+end)
+
+-- Make the toggle button draggable
+local dragToggle = nil
+local dragInput = nil
+local dragStart = nil
+local startPos = nil
+
+local function updateDrag(input)
+    local delta = input.Position - dragStart
+    ToggleButton.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+end
+
+ToggleButton.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragToggle = true
+        dragStart = input.Position
+        startPos = ToggleButton.Position
+        
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragToggle = false
+            end
+        end)
+    end
+end)
+
+ToggleButton.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+        dragInput = input
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if input == dragInput and dragToggle then
+        updateDrag(input)
+    end
+end)
+
+RunService.Heartbeat:Connect(function()
+    if triggerbotEnabled then
+        autoclicker.enabled = false
+        for _, player in pairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer and IsPlayerInFOV(player) then
+                autoclicker.enabled = true
+                break
+            end
+        end
+
+        if autoclicker.enabled then
+            TapScreen()
+        end
+    end
+end)
